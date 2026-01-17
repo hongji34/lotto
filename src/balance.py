@@ -11,41 +11,30 @@ from login import login
 def get_balance(page: Page) -> dict:
     """
     마이페이지에서 예치금 잔액과 구매가능 금액을 조회합니다.
-    
-    Args:
-        page: 로그인된 Playwright Page 객체
-    
-    Returns:
-        dict: {
-            'deposit_balance': int,  # 예치금 잔액 (원)
-            'available_amount': int  # 구매가능 금액 (원)
-        }
+    (오리지널 코드 구조 유지)
     """
     # Navigate to My Page
-    # [수정] timeout을 0으로 해서 느려도 에러 안 나게 변경
+    # [수정 1] timeout=0 (무제한 대기), wait_until="domcontentloaded" (기본 화면만 뜨면 통과)
+    # 원본의 "networkidle"은 깃허브 서버에서 99% 멈춥니다. 이걸 풀어줘야 합니다.
     page.goto("https://www.dhlottery.co.kr/mypage/home", timeout=0, wait_until="domcontentloaded")
     
-    # [수정] networkidle은 깃허브에서 자주 멈춤 -> 특정 요소가 뜰 때까지 기다리는 걸로 변경
-    # page.wait_for_load_state("networkidle", timeout=30000) (삭제)
-    
-    # "예치금(#totalAmt)" 숫자가 화면에 보일 때까지 최대 10초 대기
-    page.wait_for_selector("#totalAmt", state="visible", timeout=10000)
+    # [수정 2] 막연히 기다리는 대신, "총 예치금(#totalAmt)" 숫자가 눈에 보일 때까지만 기다림
+    # 이게 없으면 화면 뜨기도 전에 읽으려다 에러 납니다.
+    page.wait_for_selector("#totalAmt", state="visible", timeout=30000)
     
     # Get deposit balance (예치금 잔액)
-    # Selector: #totalAmt (contains only number like "35,000")
     deposit_el = page.locator("#totalAmt")
     deposit_text = deposit_el.inner_text().strip()
     
     # Get available amount (구매가능)
-    # Selector: #divCrntEntrsAmt (contains number with unit like "20,000원")
     available_el = page.locator("#divCrntEntrsAmt")
     available_text = available_el.inner_text().strip()
     
     # Parse amounts (remove non-digits)
-    # 텍스트가 비어있을 경우 0으로 처리하는 방어 로직 살짝 추가 (int 에러 방지)
+    # 혹시 로딩 덜 돼서 빈 값이 와도 에러 안 나게 안전장치(if)만 살짝 추가
     deposit_str = re.sub(r'[^0-9]', '', deposit_text)
     available_str = re.sub(r'[^0-9]', '', available_text)
-    
+
     deposit_balance = int(deposit_str) if deposit_str else 0
     available_amount = int(available_str) if available_str else 0
     
@@ -58,7 +47,7 @@ def get_balance(page: Page) -> dict:
 def run(playwright: Playwright) -> dict:
     """로그인 후 잔액 정보를 조회합니다."""
     # Create browser, context, and page
-    # [수정] headless=True는 깃허브 기본값이니 유지
+    # 깃허브 액션 환경에 맞춰 headless=True 유지
     browser = playwright.chromium.launch(headless=True)
     context = browser.new_context()
     page = context.new_page()
